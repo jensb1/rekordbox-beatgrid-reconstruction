@@ -35,7 +35,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-Model weights are not included in this repository. The extraction script reads
-the model from a locally installed rekordbox application. The model files are
-madmom's public `downbeats_blstm_7.pkl` / `downbeats_blstm_8.pkl`
-(CPJKU/madmom_models).
+Model data is included in `models/` under **CC BY-NC-SA 4.0**, separately from
+the MIT-licensed source code. It is madmom's public
+`downbeats_blstm_7.pkl` / `downbeats_blstm_8.pkl` (CPJKU/madmom_models).
+See `models/README.md` and `models/LICENSE-CC-BY-NC-SA-4.0.txt`.

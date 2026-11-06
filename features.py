@@ -88,6 +88,9 @@ def features(signal: np.ndarray, filterbanks: dict[str, np.ndarray]) -> np.ndarr
 
 
 def load_filterbanks(path: str | Path | None = None) -> dict[str, np.ndarray]:
-    path = path or Path(__file__).parent / "extracted" / "filterbanks.npz"
+    if path is None:
+        path = Path(__file__).parent / "models" / "filterbanks.npz"
+        if not path.exists():
+            path = Path(__file__).parent / "extracted" / "filterbanks.npz"
     data = np.load(path)
     return {key: data[key] for key in data.files}

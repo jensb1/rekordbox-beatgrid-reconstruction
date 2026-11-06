@@ -71,14 +71,19 @@ Requirements: Python 3.11+, `numpy`, `ffmpeg` on `PATH`.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# one-time: extract weights + filterbanks from the installed rekordbox app
-.venv/bin/python extract_model_data.py
-
-# detect beats and a constant grid
+# detect beats and a constant grid (uses the committed models in models/)
 .venv/bin/python detect.py track.mp3 --model model8 --chunk-seconds 60 --grid --json beats.json
 ```
 
-The extractor reads the model from:
+The model weights and filterbanks are committed in `models/`. To refresh them
+directly from madmom's public model repository:
+
+```sh
+.venv/bin/python fetch_models.py
+```
+
+`extract_model_data.py` is the alternative path: it reads the same weights and
+filterbanks from a locally installed rekordbox app:
 
 ```
 /Applications/rekordbox 7/rekordbox.app/Contents/Resources/models/detect_beat/modelN
@@ -108,9 +113,20 @@ the recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count,
 but the last few milliseconds of phase and the PQT2 microsecond period are not
 yet bit-identical.
 
+## Licensing
+
+The source code in this repository is MIT-licensed (see `LICENSE`).
+
+The model data in `models/` is **CC BY-NC-SA 4.0** (see `models/README.md` and
+`models/LICENSE-CC-BY-NC-SA-4.0.txt`). It is madmom’s public model data; it is
+not MIT-licensed and may not be used commercially without permission from the
+original rights holders.
+
 ## Files
 
 ```
+models/                  madmom folds 7/8 (CC BY-NC-SA 4.0) + filterbanks
+fetch_models.py          download/convert the public madmom models
 protobuf_min.py          minimal protobuf reader (no TensorFlow needed)
 extract_weights.py       read TensorBundle variables.index/data
 extract_model_data.py    extract weights + filterbanks to extracted/*.npz

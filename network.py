@@ -64,7 +64,10 @@ def bidirectional(x, layer, index):
 
 def activations(features: np.ndarray, model: str = "model7") -> np.ndarray:
     """Return (frames, 2) beat/downbeat activations for 314-dim features."""
-    weights = np.load(HERE / "extracted" / f"{model}_weights.npz")
+    weights_path = HERE / "models" / f"{model}_weights.npz"
+    if not weights_path.exists():
+        weights_path = HERE / "extracted" / f"{model}_weights.npz"
+    weights = np.load(weights_path)
     layer = {k: weights[k] for k in weights.files}
 
     out = features.astype(np.float32)
