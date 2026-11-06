@@ -1,0 +1,4 @@
+numpy>=1.26
+# optional, for validate.py
+# tensorflow==2.16.1
+# madmom (git+https://github.com/CPJKU/madmom.git)
