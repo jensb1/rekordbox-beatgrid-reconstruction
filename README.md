@@ -113,6 +113,17 @@ the recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count,
 but the last few milliseconds of phase and the PQT2 microsecond period are not
 yet bit-identical.
 
+Measured on a clean, untouched Beatport track with a rekordbox PQT2 grid:
+
+```
+PQT2 target:       first = 47,960.23 us, period = 491,801.23 us
+current output:    first = 42,222 us,    period = ~491,803 us
+detector check:    features/network max error ~5e-6, HMM bit-exact
+```
+
+The remaining gap is the final `createBeatData` / `convertToMicrosec` /
+fractional-BPM conversion, not the BLSTM or HMM detector.
+
 ## Licensing
 
 The source code in this repository is MIT-licensed (see `LICENSE`).
