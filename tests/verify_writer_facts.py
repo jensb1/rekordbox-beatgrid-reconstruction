@@ -114,10 +114,11 @@ def main() -> None:
         print(f"{name}: beats={len(us)} unit={unit} encoding=exact "
               f"lattice_deviations={dev} (expected {expected})")
 
+    # Optional local fixture (not published): exact deviation index lists.
     fixture = ROOT / "delta_fixture.json"
     if fixture.exists():
         json.loads(fixture.read_text())
-        print(f"delta_fixture.json: parsed")
+        print("delta_fixture.json: parsed (local)")
 
     if failures:
         print("\nFAIL")
