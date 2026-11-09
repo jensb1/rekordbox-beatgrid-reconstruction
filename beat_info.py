@@ -175,6 +175,68 @@ def _self_test() -> None:
     assert segs and segs[0][1] == 122
 
 
+
+
+
+# ---------------------------------------------------------------------------
+# segAdjust (§56/§58/§59) -- partial port
+# ---------------------------------------------------------------------------
+
+SAMPLE_SCALE_DIV = 1024.0
+
+
+def seg_adjust(beats: list[BeatInfo], candidates: list[int],
+               sample_rate: int = 44100, beats_per_bar: int = 4) -> list[int]:
+    """Port of the traced part of `BeatInfoAnalyzer::segAdjust`.
+
+    Traced (§56, §58, §59):
+
+        scale  = round(sample_rate * 1024 / 1000) / 1024        # 44.1 at 44.1 kHz
+        pred_k = scale * cumsum(interval_ms)                    # samples
+        off_k  = trunc(pred_k / 8)                              # 8-sample quantum
+        i      = index in `candidates` nearest the neighbour's position
+        pos_k  = candidates[i] +/- off_k, clamped to [first, last] and >= 0
+
+    UNVERIFIED: which direction (+/-) applies, what the clamp bounds are exactly,
+    and that `candidates` is the vector at `BeatInfoAnalyzeInfo+8` (a candidate
+    grid rather than an audio peak list -- §60). This function exists so the
+    formula is executable and can be tested the moment those are settled.
+    """
+    scale = round(sample_rate * SAMPLE_SCALE_DIV / 1000.0) / SAMPLE_SCALE_DIV
+    if not beats or not candidates:
+        return []
+    cand = sorted(int(c) for c in candidates)
+    lo, hi = cand[0], cand[-1]
+    out: list[int] = []
+    acc = 0.0
+    prev = cand[0]
+    for k, b in enumerate(beats):
+        acc += b.interval
+        pred = scale * acc
+        off = int(pred / 8.0)
+        # nearest candidate to the running position
+        i = min(range(len(cand)), key=lambda j: abs(cand[j] - prev))
+        pos = cand[i] + off if k == 0 else cand[i] - off
+        pos = max(lo, min(hi, pos))
+        pos = max(0, pos)
+        out.append(pos)
+        prev = cand[i]
+    return out
+
+
+def _self_test_seg() -> None:
+    iv = 60000.0 / 122.0                      # ms per beat at 122 BPM
+    beats = [BeatInfo(pos=0, interval=iv) for _ in range(9)]
+    cands = [int(round(i * 44.1 * iv)) for i in range(9)]
+    out = seg_adjust(beats, cands)
+    assert len(out) == len(beats)
+    assert out[0] >= 0 and all(p >= 0 for p in out)
+    # the accumulation of 8 beats at 122 BPM is ~ 8*21688.5 samples
+    acc = 44.1 * 8 * iv
+    assert abs(acc - 8 * 21688.5) < 1.0, acc
+
+
 if __name__ == "__main__":
     _self_test()
-    print("beat_info.py self-test OK")
+    _self_test_seg()
+    print("beat_info.py self-tests OK")
