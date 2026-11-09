@@ -133,8 +133,12 @@ how `pos` is produced from audio (`createBeatData`, `findBeatPositionForBeat`,
 `offsetBeatPosition`). `detect.py --grid` feeds a fitted lattice into the exact
 encoder, so the format matches while the grid parameters do not:
 
-* the written lattice's BPM is not the BPM printed in `PQTZ` (it differs in the
-  5th decimal: `121.999847` written vs `122.00` displayed for Donpachi);
+* `PQTZ` stores a single constant BPM per track (`12200`, `12300`) and every beat
+  repeats it; the beat *positions*, however, correspond to a slightly different
+  rate (e.g. 122.00051 for a stored 122.00, 123.00038 for a stored 123.00), i.e.
+  the positions are not produced by evaluating the stored BPM — they come from
+  accumulating per-beat intervals, which is why the grid is a near-lattice rather
+  than an exact one;
 * it is not on `getPeakBpm`'s 0.001 BPM search grid nor on `bpmAdjust`'s 0.05
   grid, so a further refinement downstream of both exists;
 * for Hutchula and Giv Me Luv the reference positions are only ever +-1 unit
