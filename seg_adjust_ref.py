@@ -13,7 +13,8 @@ Read so far: 0x100f6a008-0x100f6a1dc (setup + per-beat snap),
              0x100f6a1dc-0x100f6a300 (second snap + bounds),
              0x100f6a300-0x100f6a37c (walk setup),
              0x100f6a37c-0x100f6a4fc (candidate search + score accumulation).
-Not yet read: 0x100f6a4fc-0x100f6a5f4 (end of the walk body and the tail).
+Read so far: 0x100f6a008-0x100f6a5f8 (whole function; the walk body's
+residual bookkeeping d16/d17/d18/d20 is only partly resolved).
 """
 
 from __future__ import annotations
@@ -130,8 +131,18 @@ def seg_adjust(this: dict, info: dict, beats: bytes, w3: int) -> None:
 
             # 0x100f6a318-0x100f6a320  d9 += 96.0 ; loop while d9 < d31
             d9 += D_WALK
-        # 0x100f6a4fc onward: NOT READ
-        raise NotImplementedError("0x100f6a4fc-0x100f6a5f4 not read yet")
+
+        # ---- tail (0x100f6a5a4-0x100f6a5c8) ------------------------------
+        # The residual bookkeeping that produces d16/d17/d18/d20 is only
+        # partly resolved (0x100f6a2fc-0x100f6a548 and 0x100f6a584-0x100f6a5a0),
+        # so the final stores are transliterated but their inputs are marked.
+        #   d16 = frintz((d9 - d27) * d29)          # 0x100f6a538-0x100f6a540
+        #   d20 = fmsub(d24, d16, d9)               # 0x100f6a544
+        #   d17 = d8, d18 = d23                     # 0x100f6a30c-0x100f6a310
+        raise NotImplementedError(
+            "tail 0x100f6a5a4: stores are *x1 = (int)d20, *(float*)x0 = (float)d18, "
+            "record[+0xc] = (int)d17, record[+0x10] = (int)d16 -- d16/d17/d18/d20 "
+            "provenance only partly resolved")
 
 
 if __name__ == "__main__":
