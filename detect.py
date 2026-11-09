@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 
 import hmm
+import writer
 from features import FPS, HOP, load_audio, load_filterbanks, features
 from network import activations
 
@@ -115,8 +116,9 @@ def constant_grid(beats: np.ndarray, duration: float,
     # truncation, not rounding:
     #     us = floor(pos * 1_000_000 / unit)
     # PQTZ (ms) and PQT2 (fraction) are then just the decimal split of `us`.
-    pos = np.rint((phase + np.arange(count) * period) * GRID_UNIT).astype(np.int64)
-    us = pos * 1_000_000 // GRID_UNIT
+    pos = writer.lattice_positions(phase * GRID_UNIT, period * GRID_UNIT,
+                                   count, GRID_UNIT)
+    us = writer.encode_timestamps(pos, GRID_UNIT)
     return {
         "bpm": bpm,
         "count": int(len(us)),
