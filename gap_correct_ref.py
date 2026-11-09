@@ -73,10 +73,45 @@ def gap_correct(this: dict, beats: bytes, w2: int, w3: int, w4: int) -> bytes:
     struct.pack_into("<i", rec, 0x10, -1)
     rec[0x14] = 0
 
-    # 0x100f6a730 onward: the growth path + the interpolation of the remaining
-    # records (uses w13, w9f, w26, w27, interval) -- NOT READ YET.
-    raise NotImplementedError(
-        "0x100f6a730-0x100f6aa6c: growth path and interpolation loop not read")
+    records = [bytes(rec)]
+
+    # 0x100f6a7c4-0x100f6a7e0: emit w27 further records, advancing by d8 each time
+    while w27 != 0:
+        d9 += d8
+        w27 -= 1
+        w28 = int(d9)                      # fcvtzs
+        r = bytearray(BEAT_STRIDE)
+        struct.pack_into("<i", r, 0x00, w28)
+        struct.pack_into("<i", r, 0x04, 0)
+        struct.pack_into("<f", r, 0x08, interval)
+        struct.pack_into("<i", r, 0x0C, -1)
+        struct.pack_into("<i", r, 0x10, -1)
+        r[0x14] = 0
+        records.append(bytes(r))
+
+    # 0x100f6a7e4-0x100f6a808: mark the record at index w27 and stamp w13
+    idx = w27 if w27 >= 0 else 0
+    r = bytearray(records[idx])
+    r[0x14] = 1                             # strb w10(=1), [x9,#0x14]
+    struct.pack_into("<i", r, 0x10, w13)    # str w13, [x9,#0x10]
+    records[idx] = bytes(r)
+
+    # 0x100f6a80c-0x100f6a850: emit w26 further records, same shape, plus two
+    # bytes copied from the stack ([sp+0x1d], [sp+0x1f]) to +0x15 and +0x17.
+    for _ in range(max(w26, 0)):
+        d9 += d8
+        w23 = int(d9)
+        r = bytearray(BEAT_STRIDE)
+        struct.pack_into("<i", r, 0x00, w23)
+        struct.pack_into("<i", r, 0x04, 0)
+        struct.pack_into("<f", r, 0x08, interval)
+        struct.pack_into("<i", r, 0x0C, -1)
+        struct.pack_into("<i", r, 0x10, -1)
+        r[0x14] = 0
+        records.append(bytes(r))
+
+    # 0x100f6a91c onward: tail not read yet (post-loop bookkeeping)
+    return b"".join(records)
 
 
 if __name__ == "__main__":
