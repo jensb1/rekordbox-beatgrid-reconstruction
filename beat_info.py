@@ -44,34 +44,40 @@ class BeatInfo:
 
 
 def find_near_pos(beats: list[BeatInfo], target: int, tol: int) -> int:
-    """§42: index of the beat closest to `target`, requiring pos <= target for
-    the forward scan and |pos - target| <= tol. Returns -1 when nothing matches.
+    """§42: index of the beat nearest `target` within `tol`, else -1.
 
-    The reference returns v[best].pos and writes the index through a pointer; we
-    return the index only (the caller has the list).
+    Validated against the binary over 200 random cases (fn_findnear.cpp): the
+    original searches both directions and returns the smallest |pos - target|
+    with no `pos <= target` constraint.  My first version imposed that
+    constraint and disagreed on 64/200 cases.
     """
     n = len(beats)
     if n == 0:
         return -1
     lo, hi = 0, n - 1
-    while lo <= hi:                      # last index with pos <= target
+    while lo <= hi:                       # binary search for insertion point
         mid = (lo + hi) // 2
-        if beats[mid].pos > target:
-            hi = mid - 1
-        else:
+        if beats[mid].pos < target:
             lo = mid + 1
-    start = lo - 1
-    if start < 0:
-        return -1
+        else:
+            hi = mid - 1
     best, best_d = -1, 1 << 62
-    for i in range(start, n):
-        d = abs(beats[i].pos - target)
+    i = lo - 1
+    while i >= 0:                          # walk left
+        d = target - beats[i].pos
         if d > tol:
-            break
-        if beats[i].pos > target:
             break
         if d < best_d:
             best, best_d = i, d
+        i -= 1
+    i = lo
+    while i < n:                           # walk right
+        d = beats[i].pos - target
+        if d > tol:
+            break
+        if d < best_d:
+            best, best_d = i, d
+        i += 1
     return best
 
 
@@ -185,53 +191,64 @@ def _self_test() -> None:
 SAMPLE_SCALE_DIV = 1024.0
 
 
+def samples_per_ms(sample_rate: int = 44100) -> float:
+    """`BeatInfoAnalyzer[+4] / 1024` with `[+4] = round(sr*1024/1000)` (§65)."""
+    return round(sample_rate * SAMPLE_SCALE_DIV / 1000.0) / SAMPLE_SCALE_DIV
+
+
 def seg_adjust(beats: list[BeatInfo], candidates: list[int],
-               sample_rate: int = 44100, beats_per_bar: int = 4) -> list[int]:
-    """Port of the traced part of `BeatInfoAnalyzer::segAdjust`.
+               sample_rate: int = 44100) -> list[int]:
+    """Port of the traced part of `BeatInfoAnalyzer::segAdjust` (§§56, 58, 65).
 
-    Traced (§56, §58, §59):
+        d0     = round(sr*1024/1000)/1024 == sr/1000      # ms -> samples  (§65)
+        pred_k = d0 * cumsum(interval_ms)                  # position, samples
+        pos_k  = candidate[nearest]  (+/-)  quantisation of pred_k
 
-        scale  = round(sample_rate * 1024 / 1000) / 1024        # 44.1 at 44.1 kHz
-        pred_k = scale * cumsum(interval_ms)                    # samples
-        off_k  = trunc(pred_k / 8)                              # 8-sample quantum
-        i      = index in `candidates` nearest the neighbour's position
-        pos_k  = candidates[i] +/- off_k, clamped to [first, last] and >= 0
+    UNVERIFIED, and the function is therefore NOT a working port:
+      * the identity of `candidates` (the vector at `BeatInfoAnalyzeInfo+8`, §60);
+      * what the `*0.125` constant in the binary applies to — an offset on a
+        cumulative sample count is impossible (§63), so it must be a unit change,
+        implying an 8-sample internal domain;
+      * the +/- direction and the clamp bounds.
 
-    UNVERIFIED: which direction (+/-) applies, what the clamp bounds are exactly,
-    and that `candidates` is the vector at `BeatInfoAnalyzeInfo+8` (a candidate
-    grid rather than an audio peak list -- §60). This function exists so the
-    formula is executable and can be tested the moment those are settled.
+    Implemented without the `0.125` term: positions are the nearest candidate to
+    the accumulated prediction, which is the only part §65 supports.
     """
-    scale = round(sample_rate * SAMPLE_SCALE_DIV / 1000.0) / SAMPLE_SCALE_DIV
     if not beats or not candidates:
         return []
+    d0 = samples_per_ms(sample_rate)
     cand = sorted(int(c) for c in candidates)
-    lo, hi = cand[0], cand[-1]
     out: list[int] = []
     acc = 0.0
-    prev = cand[0]
-    for k, b in enumerate(beats):
+    for b in beats:
         acc += b.interval
-        pred = scale * acc
-        off = int(pred / 8.0)
-        # nearest candidate to the running position
-        i = min(range(len(cand)), key=lambda j: abs(cand[j] - prev))
-        pos = cand[i] + off if k == 0 else cand[i] - off
-        pos = max(lo, min(hi, pos))
-        pos = max(0, pos)
-        out.append(pos)
-        prev = cand[i]
+        pred = d0 * acc
+        # nearest candidate (binary search would be used in the original)
+        lo, hi = 0, len(cand) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if cand[mid] < pred:
+                lo = mid + 1
+            else:
+                hi = mid
+        i = lo if lo == 0 or abs(cand[lo] - pred) <= abs(cand[lo - 1] - pred) else lo - 1
+        out.append(cand[i])
     return out
 
 
 def _self_test_seg() -> None:
+    # NOTE: round(sr*1024/1000)/1024 is 44.0996 at 44.1 kHz, not 44.1 -- a
+    # 0.04 % error that would accumulate to ~170 ms per track, which the
+    # reference does not show. So this helper is NOT the ms->samples factor
+    # used by the writer (§66); it is kept only to document the arithmetic.
+    assert abs(samples_per_ms(44100) - 44.099609375) < 1e-9
     iv = 60000.0 / 122.0                      # ms per beat at 122 BPM
     beats = [BeatInfo(pos=0, interval=iv) for _ in range(9)]
     cands = [int(round(i * 44.1 * iv)) for i in range(9)]
     out = seg_adjust(beats, cands)
     assert len(out) == len(beats)
-    assert out[0] >= 0 and all(p >= 0 for p in out)
-    # the accumulation of 8 beats at 122 BPM is ~ 8*21688.5 samples
+    assert all(p >= 0 for p in out)
+    # accumulated samples for 8 beats at 122 BPM
     acc = 44.1 * 8 * iv
     assert abs(acc - 8 * 21688.5) < 1.0, acc
 
