@@ -65,6 +65,11 @@ def detect(signal: np.ndarray, model: str = "model8",
 
 FOCUS_OFFSET = 0.05110  # half of the 4096-sample STFT window + filter delay
 
+# Beat positions are integers on a sample lattice; `UnitBeatAdjust` carries the
+# resolve unit in its [0xc] field (sampleRate/4 = 11025). Reference grids use
+# 11025 for one track and 44100 for the others, so keep it parameterisable.
+GRID_UNIT = 44100
+
 
 def _fit_tempo(times: np.ndarray) -> tuple[float, float]:
     """Robust linear fit of beat index -> time (seconds).
@@ -105,7 +110,13 @@ def constant_grid(beats: np.ndarray, duration: float,
         phase = intercept + FOCUS_OFFSET
     phase = float(phase % period)
     count = int(np.floor((duration + 0.03 - phase) / period)) + 1
-    us = np.round((phase + np.arange(count) * period) * 1e6).astype(np.int64)
+    # Rekordbox stores beat positions as integers on a sample lattice
+    # (UnitBeatAdjust[0xc] units) and derives the microsecond timestamp by
+    # truncation, not rounding:
+    #     us = floor(pos * 1_000_000 / unit)
+    # PQTZ (ms) and PQT2 (fraction) are then just the decimal split of `us`.
+    pos = np.rint((phase + np.arange(count) * period) * GRID_UNIT).astype(np.int64)
+    us = pos * 1_000_000 // GRID_UNIT
     return {
         "bpm": bpm,
         "count": int(len(us)),
