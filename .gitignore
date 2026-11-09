@@ -4,3 +4,8 @@ __pycache__/
 .venv/
 *.json
 models/*.pkl
+# local reference media (not committed)
+tests/reference/*/audio.m4a
+tests/reference/*/ANLZ.DAT
+tests/reference/*/ANLZ.EXT
+tests/reference/*/ANLZ.2EX

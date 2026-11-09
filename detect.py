@@ -63,7 +63,25 @@ def detect(signal: np.ndarray, model: str = "model8",
     return hmm.downbeat_tracking(detect_activations(signal, model, chunk_seconds))
 
 
-FOCUS_OFFSET = 2048 / 44100  # half of the 4096-sample STFT window
+FOCUS_OFFSET = 0.05110  # half of the 4096-sample STFT window + filter delay
+
+
+def _fit_tempo(times: np.ndarray) -> tuple[float, float]:
+    """Robust linear fit of beat index -> time (seconds).
+
+    Fits once, drops beats more than 50 ms off the line, and refits.
+    """
+    index = np.arange(len(times), dtype=float)
+    keep = np.ones(len(times), dtype=bool)
+    for _ in range(5):
+        slope, intercept = np.polyfit(index[keep], times[keep], 1)
+        residual = times - (intercept + slope * index)
+        updated = np.abs(residual - np.median(residual[keep])) < 0.05
+        if updated.sum() == keep.sum():
+            break
+        keep = updated
+    slope, intercept = np.polyfit(index[keep], times[keep], 1)
+    return float(slope), float(intercept)
 
 
 def constant_grid(beats: np.ndarray, duration: float,
@@ -71,24 +89,21 @@ def constant_grid(beats: np.ndarray, duration: float,
                   phase: float | None = None) -> dict:
     """Fit the constant-BPM grid.
 
-    Recovered from rekordbox's focus step on untouched auto-analysed tracks:
-
-    - BPM is the least-squares tempo rounded to a whole BPM.
-    - The grid is offset by half the 4096-sample STFT window (46.44 ms).
-
-    The remaining focus step (`beatPositionAdjust`) nudges the phase by a few
-    milliseconds using low-pass filtered audio; see README.md.
+    The period is the robust least-squares tempo of the detector beats; the
+    BPM field is that tempo rounded to a whole BPM. The phase is the fitted
+    intercept plus the focus half-window/filter offset.
     """
     times = beats[:, 0]
     if bpm is None:
-        slope, _ = np.polyfit(np.arange(len(times)), times, 1)
-        bpm = float(np.round(60.0 / slope))
-    period = 60.0 / bpm
+        period_fit, intercept = _fit_tempo(times)
+        bpm = float(np.round(60.0 / period_fit))
+    else:
+        period_fit = 60.0 / bpm
+        intercept = float(times[0])
+    period = period_fit
     if phase is None:
-        phase = float(times[0] + FOCUS_OFFSET)
-    if phase < 0:
-        phase += period
-    # allow a beat just past the container's reported duration (encoder delay)
+        phase = intercept + FOCUS_OFFSET
+    phase = float(phase % period)
     count = int(np.floor((duration + 0.03 - phase) / period)) + 1
     us = np.round((phase + np.arange(count) * period) * 1e6).astype(np.int64)
     return {

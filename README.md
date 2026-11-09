@@ -113,16 +113,21 @@ the recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count,
 but the last few milliseconds of phase and the PQT2 microsecond period are not
 yet bit-identical.
 
-Measured on a clean, untouched Beatport track with a rekordbox PQT2 grid:
+The exactness gate is `tests/verify_exact.py`. It generates the grid from audio
+only and compares bar, BPM×100 and PQT2 microseconds against local reference
+ANLZ files. Current state on the three reference tracks:
 
 ```
-PQT2 target:       first = 47,960.23 us, period = 491,801.23 us
-current output:    first = 42,222 us,    period = ~491,803 us
-detector check:    features/network max error ~5e-6, HMM bit-exact
+beat count:  exact
+BPM field:   exact
+period:      within ~1 us/beat
+first beat:  -452 us (Hutchula), -3 us (Dodonpachi), +460 us (Giv Me Luv)
 ```
 
-The remaining gap is the final `createBeatData` / `convertToMicrosec` /
-fractional-BPM conversion, not the BLSTM or HMM detector.
+So the remaining gap is a constant sub-millisecond phase per track, not the
+BLSTM/HMM detector or the period. It is the legacy `GetOffsetCalc` phase that
+the focus writer adds. The limitation stays until `tests/verify_exact.py`
+prints `EXACT MATCH` for every reference track.
 
 ## Licensing
 
