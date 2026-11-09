@@ -63,9 +63,15 @@ def seg_adjust(this: dict, info: dict, beats: bytes, w3: int) -> None:
     # 0x100f6a07c  d1 = (double)w3
     d1 = float(w3)
 
+    # callers (0x100f5e628, 0x100f6211c) pass:
+    #   x0 = this, x1 = info, x2 = stack-local vector, w3 = [sp+0xfc]
+    out_records: list[bytes] = []
+
     # 0x100f6a0d4..  loop over beats
     for k in range(n):
-        # 0x100f6a0e8  x1 = beats + k*24 ; d19 = (double)*(float*)(x1+8)
+        # 0x100f6a0e8  x1 = beats + k*24 ; rec = that record
+        rec = bytearray(beats[k * BEAT_STRIDE:(k + 1) * BEAT_STRIDE])
+        # 0x100f6a0f0  ldr s19,[x0,#8]!  -> d19 = (double)record.interval
         d19 = _ldr_s(beats, k * BEAT_STRIDE + 8)
         # 0x100f6a0f4.. d23 = 0 + d19 ; d24 = d0 * d23
         d24 = d0 * d19
@@ -151,16 +157,18 @@ def seg_adjust(this: dict, info: dict, beats: bytes, w3: int) -> None:
 
         # ---- tail (0x100f6a5a4-0x100f6a5c8) --------------------------------
         #   if d20 < 0: skip the stores for this beat (0x100f6a5a8 b.lt)
-        #   *x1               = (int)d20            # 0x100f6a5ac/0x100f6a5b0
-        #   *(float*)x0       = (float)d18          # 0x100f6a5b4/0x100f6a5bc
-        #   rec[x17 + 0x0c]   = (int)d17            # 0x100f6a5b8/0x100f6a5c8
-        #   rec[x17 + 0x10]   = (int)d16            # 0x100f6a5c4/0x100f6a5c8
+        # Store targets resolve through the pre-index load at 0x100f6a0f0
+        # (`ldr s19,[x0,#8]!`), which leaves x1 = record+0 and x0 = record+8:
+        #   record.pos      = (int)d20              # 0x100f6a5ac/5b0  str w13,[x1]
+        #   record.interval = (float)d18            # 0x100f6a5b4/5bc  str s19,[x0]
+        #   rec[x17 + 0x0c] = (int)d17              # 0x100f6a5b8/5c8
+        #   rec[x17 + 0x10] = (int)d16              # 0x100f6a5c4/5c8
         if d20 >= 0.0:
-            out_residual = int(d20)             # *x1
-            out_interval = d18                  # *(float*)x0
-            rec_pos_c = int(d17)                # record[+0xc]
-            rec_pos_10 = int(d16)               # record[+0x10]
-            this.setdefault("out", []).append(
-                (out_residual, out_interval, rec_pos_c, rec_pos_10))
+            rec[0] = int(d20)                   # record.pos = residual
+            rec[8] = float(d18)                 # record.interval
+            rec[0x0C] = int(d17)
+            rec[0x10] = int(d16)
+            out_records.append(bytes(rec))
         # 0x100f6a0d8: next beat, until k == n-1
     # 0x100f6a5d0: epilogue
+    this["records"] = out_records
