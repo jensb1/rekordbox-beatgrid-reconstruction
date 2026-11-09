@@ -130,6 +130,21 @@ def main() -> None:
         print("\nopen:")
         for s in open_items:
             print(f"  [ ] {s}")
+        print("""
+BLOCKED (recorded in REVERSE_ENGINEERING.md §102):
+  The writer does not create the grid. Driven directly, both analyser versions
+  (BeatAnalyzer_1_0 and 2_0) return their input beat positions unchanged, and
+  bpmAdjust returns its input BPM to the last bit. The sample-precision positions
+  the reference ANLZ carries must therefore already exist in the analysis output.
+  Every analysis entry point callable in the installed build either quantises to a
+  10 ms frame grid (model path, flags 0-4) or provides no beat list at all; the
+  peak stage that would produce sub-frame positions sits behind a constructed
+  object (Analyzer+0x700) and indirect calls (SimpleEnvelopeMaker::analyze has no
+  direct call sites).
+  Missing observable: a beat list with sub-frame positions.
+  Next input: a build or hook that exposes the peak stage, or the reference grids'
+  provenance.
+""")
         sys.exit(1)
 
 
