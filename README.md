@@ -107,11 +107,21 @@ python3.11 -m venv /tmp/mmvenv
 ## Status / limitation
 
 The detector is exact. The remaining difference to a rekordbox-written ANLZ
-grid is the final focus/grid-snap writer (`BeatAnalyzer_2_0::analyzeFocus` /
-`convertToMicrosec`). `detect.py --grid` implements the constant-BPM fit with
-the recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count,
-but the last few milliseconds of phase and the PQT2 microsecond period are not
-yet bit-identical.
+grid is the grid writer, `BeatAnalyzer_2_0::UnitBeatAdjust`, which is only
+partially reconstructed. `detect.py --grid` implements a constant-BPM fit with a
+recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count, but
+the phase and the PQT2 microseconds are not bit-identical.
+
+What is known about the writer: written positions are integer samples at
+44.1 kHz, converted with `us = round(smp * 1e6 / 44100)`; the analyser
+decimates to 11025 Hz, runs five biquads, scores a candidate grid by the peak of
+a beat-aligned +-50 ms profile of the high-band envelope, and shifts the grid by
+a downbeat-derived offset.
+The written lattice's BPM is *not* the BPM printed in `PQTZ` (it differs in the
+3rd-4th decimal), and the reference tracks do not all use the same
+quantisation domain, so more than one writer path is involved.
+`writer_probe.py` implements the decoded pieces for inspection; it does not
+produce a grid.
 
 The exactness gate is `tests/verify_exact.py`. It generates the grid from audio
 only and compares bar, BPM×100 and PQT2 microseconds against local reference
@@ -124,10 +134,9 @@ period:      within ~1 us/beat
 first beat:  -452 us (Hutchula), -3 us (Dodonpachi), +460 us (Giv Me Luv)
 ```
 
-So the remaining gap is a constant sub-millisecond phase per track, not the
-BLSTM/HMM detector or the period. It is the legacy `GetOffsetCalc` phase that
-the focus writer adds. The limitation stays until `tests/verify_exact.py`
-prints `EXACT MATCH` for every reference track.
+So the remaining gap is a sub-millisecond phase per track, not the BLSTM/HMM
+detector and not (mainly) the period. The limitation stays until
+`tests/verify_exact.py` prints `EXACT MATCH` for every reference track.
 
 ## Licensing
 
