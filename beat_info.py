@@ -192,8 +192,14 @@ SAMPLE_SCALE_DIV = 1024.0
 
 
 def samples_per_ms(sample_rate: int = 44100) -> float:
-    """`BeatInfoAnalyzer[+4] / 1024` with `[+4] = round(sr*1024/1000)` (§65)."""
-    return round(sample_rate * SAMPLE_SCALE_DIV / 1000.0) / SAMPLE_SCALE_DIV
+    """Milliseconds -> samples: `sample_rate / 1000` (§75).
+
+    Verified against the binary: `gapCorrect` written with this[4] = 44100 and a
+    21688-unit step stores interval 491.791383 = 21688/44.1. The constant in the
+    code is 0.001 (`0x3f50624dd2f1a9fc`), which I had earlier mislabelled as
+    2^-10 (0x3f50000000000000) -- that mislabel caused the §§65-67 confusion.
+    """
+    return sample_rate / 1000.0
 
 
 def seg_adjust(beats: list[BeatInfo], candidates: list[int],
@@ -237,11 +243,9 @@ def seg_adjust(beats: list[BeatInfo], candidates: list[int],
 
 
 def _self_test_seg() -> None:
-    # NOTE: round(sr*1024/1000)/1024 is 44.0996 at 44.1 kHz, not 44.1 -- a
-    # 0.04 % error that would accumulate to ~170 ms per track, which the
-    # reference does not show. So this helper is NOT the ms->samples factor
-    # used by the writer (§66); it is kept only to document the arithmetic.
-    assert abs(samples_per_ms(44100) - 44.099609375) < 1e-9
+    # ms -> samples is exactly sr/1000 (§75)
+    assert abs(samples_per_ms(44100) - 44.1) < 1e-12
+    assert abs(samples_per_ms(48000) - 48.0) < 1e-12
     iv = 60000.0 / 122.0                      # ms per beat at 122 BPM
     beats = [BeatInfo(pos=0, interval=iv) for _ in range(9)]
     cands = [int(round(i * 44.1 * iv)) for i in range(9)]

@@ -16,8 +16,8 @@ verbatim instead of adjusting it to fit an assumption.
 from __future__ import annotations
 
 BEAT_STRIDE = 24
-DEFAULT_SR = 48000
-SCALE = 2.0 ** -10
+DEFAULT_SR = 44100
+SCALE = 0.001   # 0x3f50624dd2f1a9fc; verified via fn_gap.cpp
 
 
 def _pos(buf: bytes, i: int) -> int:
@@ -57,7 +57,10 @@ def gap_correct(this: dict, beats: bytes, w2: int, w3: int, w4: int) -> bytes:
     w13 = _field10(beats, w9)
     w9f = _field10(beats, w4)
     # 0x100f6a6bc..0x100f6a6e4  interval = step / (this[4] * 2**-10)
-    d0s = float(this.get(4, DEFAULT_SR)) * SCALE
+    # Verified against the binary (tests/fn_gap.cpp): with this[4]=44100 and a
+    # 21688-unit step the interval written is 491.791383 == 21688/44.1, i.e.
+    # interval = step / (this[4] / 1000).  The constant is 0.001.
+    d0s = float(this.get(4, 44100)) * SCALE   # sampleRate/1000
     interval = d8 / d0s                    # fcvt s10 = (float)interval
 
     # 0x100f6a704  w28 = (int)d9   (the remainder, as an int)
