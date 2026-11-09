@@ -142,8 +142,18 @@ encoder, so the format matches while the grid parameters do not:
 * it is not on `getPeakBpm`'s 0.001 BPM search grid nor on `bpmAdjust`'s 0.05
   grid, so a further refinement downstream of both exists;
 * for Hutchula and Giv Me Luv the reference positions are only ever +-1 unit
-  away from a constant-step lattice, with a periodic (~8-beat) deviation
-  pattern, i.e. a per-beat sub-unit refinement, not a second writer.
+  away from a constant-step lattice with a periodic (~8-beat) deviation pattern.
+
+What the writer does *not* do is also measured: driven directly, both analyser
+versions in the installed build (`BeatAnalyzer_1_0` and `2_0`) return the beat
+positions they are given, unchanged (`bpmAdjust` returns its input BPM to the last
+bit, and `segAdjust` / `gapCorrect` only re-space the list they receive). So the
+writer shifts, filters and extends a beat list; it does not create the grid. The
+sample-precision positions must therefore already exist in the analysis output —
+and the analysis path reachable in this build emits beats on a 10 ms frame grid,
+which cannot express them. Reproducing the reference grids from audio would
+require the analysis stage that produces sub-frame positions, which is not
+reachable through the installed build's public entry points.
 
 The exactness gate is `tests/verify_exact.py`. It generates the grid from audio
 only and compares bar, BPM×100 and PQT2 microseconds against local reference
