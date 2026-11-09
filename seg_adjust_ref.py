@@ -44,7 +44,14 @@ def _ldr_w(rec_bytes: bytes, off: int) -> int:
 
 
 def seg_adjust(this: dict, info: dict, beats: bytes, w3: int) -> None:
-    """Transliteration.  `info[8]` is the candidate vector (24-byte records)."""
+    """Transliteration.  `info[8]` is the candidate vector (24-byte records).
+
+    Whole function read (0x100f6a008-0x100f6a5f8).  Remaining uncertainty is
+    confined to (a) the meaning of the direction accumulator d21
+    (0x100f6a584-0x100f6a598: d21 = -d21, then +1 if negative, loop while < 3.0)
+    and (b) which of `x0`/`x1` is written, which depends on the caller's
+    argument setup.
+    """
     n = len(beats) // BEAT_STRIDE
 
     # 0x100f6a048  cmp w13,#1 ; b.lt -> return
@@ -129,22 +136,31 @@ def seg_adjust(this: dict, info: dict, beats: bytes, w3: int) -> None:
             d12 = float(w5 - abs(cw13 - w22))
             this["score"] = this.get("score", 0.0) + d12
 
+            # ---- per-iteration bookkeeping (0x100f6a2fc-0x100f6a318) -------
+            #   d16 = frintz((d9 - d27) * d29)      # substep index, truncated
+            #   d20 = fmsub(d24, d16, d9)           # d24*d16 - d9  (residual)
+            #   d17 = d8  (= d26 * 4.0)             # saved each iteration
+            #   d18 = d23 (= d21 + interval)        # the interval
+            d16 = float(int((d9 - d27) * d29))          # frintz == trunc
+            d20 = d24 * d16 - d9                        # fmsub
+            d17 = d26 * D_FOUR
+            d18 = d23
+
             # 0x100f6a318-0x100f6a320  d9 += 96.0 ; loop while d9 < d31
             d9 += D_WALK
 
-        # ---- tail (0x100f6a5a4-0x100f6a5c8) ------------------------------
-        # The residual bookkeeping that produces d16/d17/d18/d20 is only
-        # partly resolved (0x100f6a2fc-0x100f6a548 and 0x100f6a584-0x100f6a5a0),
-        # so the final stores are transliterated but their inputs are marked.
-        #   d16 = frintz((d9 - d27) * d29)          # 0x100f6a538-0x100f6a540
-        #   d20 = fmsub(d24, d16, d9)               # 0x100f6a544
-        #   d17 = d8, d18 = d23                     # 0x100f6a30c-0x100f6a310
-        raise NotImplementedError(
-            "tail 0x100f6a5a4: stores are *x1 = (int)d20, *(float*)x0 = (float)d18, "
-            "record[+0xc] = (int)d17, record[+0x10] = (int)d16 -- d16/d17/d18/d20 "
-            "provenance only partly resolved")
-
-
-if __name__ == "__main__":
-    print(__doc__)
-    print("read blocks transliterated; unread blocks raise NotImplementedError")
+        # ---- tail (0x100f6a5a4-0x100f6a5c8) --------------------------------
+        #   if d20 < 0: skip the stores for this beat (0x100f6a5a8 b.lt)
+        #   *x1               = (int)d20            # 0x100f6a5ac/0x100f6a5b0
+        #   *(float*)x0       = (float)d18          # 0x100f6a5b4/0x100f6a5bc
+        #   rec[x17 + 0x0c]   = (int)d17            # 0x100f6a5b8/0x100f6a5c8
+        #   rec[x17 + 0x10]   = (int)d16            # 0x100f6a5c4/0x100f6a5c8
+        if d20 >= 0.0:
+            out_residual = int(d20)             # *x1
+            out_interval = d18                  # *(float*)x0
+            rec_pos_c = int(d17)                # record[+0xc]
+            rec_pos_10 = int(d16)               # record[+0x10]
+            this.setdefault("out", []).append(
+                (out_residual, out_interval, rec_pos_c, rec_pos_10))
+        # 0x100f6a0d8: next beat, until k == n-1
+    # 0x100f6a5d0: epilogue
