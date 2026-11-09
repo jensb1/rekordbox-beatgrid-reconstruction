@@ -66,7 +66,7 @@ ENTRIES = [
          evidence="not ported; harness works and reports the state fields"),
     dict(symbol="UnitBeatAdjust::putSample(short*, int)", addr="0x100f0303c",
          py="writer_probe:envelopes", harness=None,
-         evidence="decimation + 5 biquads ported (§12); not validated numerically"),
+         evidence="impulse-exact, 99.979% sample-exact (1139 of 5.4M off by 1); needs FMA for bit-exactness (§96)"),
     dict(symbol="UnitBeatAdjust::manageWave(...)", addr="0x100f03a1c",
          py="writer_probe:manage_wave", harness=None, evidence="ported, not validated"),
     dict(symbol="UnitBeatAdjust::bpmAdjust(float&, vector&, int)", addr="0x100f032dc",
