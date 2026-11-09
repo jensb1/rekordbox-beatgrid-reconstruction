@@ -112,30 +112,48 @@ partially reconstructed. `detect.py --grid` implements a constant-BPM fit with a
 recovered half-window offset; it matches the ANLZ PQTZ BPM and beat count, but
 the phase and the PQT2 microseconds are not bit-identical.
 
-What is known about the writer: written positions are integer samples at
-44.1 kHz, converted with `us = round(smp * 1e6 / 44100)`; the analyser
-decimates to 11025 Hz, runs five biquads, scores a candidate grid by the peak of
-a beat-aligned +-50 ms profile of the high-band envelope, and shifts the grid by
-a downbeat-derived offset.
-The written lattice's BPM is *not* the BPM printed in `PQTZ` (it differs in the
-3rd-4th decimal), and the reference tracks do not all use the same
-quantisation domain, so more than one writer path is involved.
-`writer_probe.py` implements the decoded pieces for inspection; it does not
-produce a grid.
+What *is* reconstructed exactly is the timestamp encoding. A beat position is
+an integer on a sample lattice, and the microsecond value in ANLZ is that
+position divided by the lattice unit and **truncated**:
+
+```
+us = pos * 1_000_000 // unit          # floor, not round
+ms = us // 1000,  frac = us % 1000    # PQTZ and PQT2 are one value split
+```
+
+`unit` is `UnitBeatAdjust`'s `[0xc]` field (`sampleRate/4 = 11025`) for one
+reference track and the raw sample rate (44100) for the other two. With the
+reference lattices as given, this reproduces 930/930, 1001/1001 and 976/976
+reference timestamps with zero mismatches; rounding instead of truncating
+matches only about half of them. See `writer.py` for the implementation and a
+self-test.
+
+The detector and encoding are therefore exact; what is *not* reconstructed is
+how `pos` is produced from audio (`createBeatData`, `findBeatPositionForBeat`,
+`offsetBeatPosition`). `detect.py --grid` feeds a fitted lattice into the exact
+encoder, so the format matches while the grid parameters do not:
+
+* the written lattice's BPM is not the BPM printed in `PQTZ` (it differs in the
+  5th decimal: `121.999847` written vs `122.00` displayed for Donpachi);
+* it is not on `getPeakBpm`'s 0.001 BPM search grid nor on `bpmAdjust`'s 0.05
+  grid, so a further refinement downstream of both exists;
+* for Hutchula and Giv Me Luv the reference positions are only ever +-1 unit
+  away from a constant-step lattice, with a periodic (~8-beat) deviation
+  pattern, i.e. a per-beat sub-unit refinement, not a second writer.
 
 The exactness gate is `tests/verify_exact.py`. It generates the grid from audio
 only and compares bar, BPM×100 and PQT2 microseconds against local reference
 ANLZ files. Current state on the three reference tracks:
 
 ```
-beat count:  exact
-BPM field:   exact
-period:      within ~1 us/beat
-first beat:  -452 us (Hutchula), -3 us (Dodonpachi), +460 us (Giv Me Luv)
+                mismatching beats   first mismatch
+dodonpachi      914 / 930           beat 2,  +23 us
+givmeluv        957 / 976           beat 0, +454 us
+hutchula       1001 / 1001          beat 0, -454 us
 ```
 
-So the remaining gap is a sub-millisecond phase per track, not the BLSTM/HMM
-detector and not (mainly) the period. The limitation stays until
+So the remaining gap is the fitted phase/period of the lattice, not the
+BLSTM/HMM detector and not the timestamp encoding. The limitation stays until
 `tests/verify_exact.py` prints `EXACT MATCH` for every reference track.
 
 ## Licensing
